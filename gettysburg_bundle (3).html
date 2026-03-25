@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battle of Gettysburg</title>
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+/* ── RESET & VARS ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --parch:#f2ddb0;--pd:#c8a45a;--ppanel:rgba(210,170,100,.13);
+  --grass:#7aad55;--forest:#2d5c30;--hill:#b07d3a;--city:#b86530;--water:#4a8ec2;
+  --union:#0f2d6b;--conf:#5e2010;--gold:#c8950f;--ink:#140a00;--inkl:#3d2010;
+  --barh:68px;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a0f00;font-family:'Crimson Text',serif;color:var(--ink)}
+
+/* ── SHELL ── */
+#wrapper{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#app{width:100%;height:100%;background:var(--parch);display:flex;flex-direction:column;overflow:hidden}
+
+/* ── HEADER ── */
+#hdr{background:var(--ink);color:var(--parch);display:flex;align-items:center;justify-content:space-between;padding:0 14px;flex-shrink:0;height:50px;border-bottom:3px solid var(--gold)}
+#hdr h1{font-family:'IM Fell English',serif;font-size:1.5em;letter-spacing:2px;white-space:nowrap}
+#hdr .sub{font-style:italic;font-size:.82em;opacity:.7;white-space:nowrap;margin-left:8px}
+#hdr-r{display:flex;align-items:center;gap:6px}
+.hs{font-size:.84em;padding:3px 8px;background:rgba(255,255,255,.1);border-radius:3px;white-space:nowrap}
+.hs b{font-weight:700}
+#fsBtn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:var(--parch);padding:4px 10px;cursor:pointer;border-radius:3px;font-family:'IM Fell English',serif;font-size:.86em}
+#fsBtn:hover{background:rgba(255,255,255,.28)}
+
+/* ── MAIN ── */
+#main{display:flex;flex:1;overflow:hidden}
+
+/* ── BOARD COLUMN ── */
+#bc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;overflow:hidden;gap:3px}
+.stag{font-style:italic;font-size:.75em;letter-spacing:1.5px;padding:1px 0;text-align:center;width:100%;flex-shrink:0}
+.ctag{color:var(--conf);font-weight:600}.utag{color:var(--union);font-weight:700}
+#hexMap{flex:1;min-height:0;width:100%;overflow:visible;cursor:default}
+
+/* ── HEX CELLS ── */
+.hex-group{cursor:pointer}
+.hex-group:hover .hex-bg{filter:brightness(.84)}
+.hex-bg{stroke:rgba(30,14,4,.28);stroke-width:1.5;transition:filter .1s}
+.hex-bg.grass {fill:var(--grass)} .hex-bg.forest{fill:var(--forest)}
+.hex-bg.hill  {fill:var(--hill)}  .hex-bg.city  {fill:var(--city)}
+.hex-bg.water {fill:var(--water)}
+
+/* State outlines */
+.hex-group.selected  .hex-bg{stroke:#fff;    stroke-width:3.5}
+.hex-group.reachable .hex-bg{stroke:#00e5ff; stroke-width:3.5}
+.hex-group.cantgt    .hex-bg{stroke:#ff2020; stroke-width:3.5;cursor:crosshair}
+/* Cannonade target wins over objective pulse — make it unmissable */
+.hex-group.cantgt    .hex-bg.hex-obj-taken{
+  animation:none !important;
+  fill:#ff2020 !important;
+  stroke:#fff !important;
+  stroke-width:4 !important;
+  filter:drop-shadow(0 0 10px #ff0000) !important;
+}
+.hex-group.vsetup    .hex-bg{stroke:rgba(255,255,255,.6);stroke-width:2;stroke-dasharray:5 3}
+
+/* Unit tokens */
+.hex-unit-bg{stroke:rgba(0,0,0,.5);stroke-width:2}
+.hex-unit-bg.union{fill:var(--union)}.hex-unit-bg.conf{fill:var(--conf)}
+.hex-unit-txt{font-family:'IM Fell English',serif;font-weight:700;pointer-events:none}
+.hex-unit-txt.union-txt{fill:#c8deff}.hex-unit-txt.conf-txt{fill:#f5ddc8}
+
+/* Objective & location labels */
+/* objective hex: gold fill instead of star */
+.hex-bg.hex-obj{fill:#c8950f!important;stroke:#8b6000!important;stroke-width:3!important;filter:drop-shadow(0 0 4px rgba(200,149,15,.7))}
+.hex-group.selected  .hex-bg.hex-obj{stroke:#fff!important;stroke-width:4!important}
+.hex-group.reachable .hex-bg.hex-obj{stroke:#00e5ff!important;stroke-width:4!important}
+.hex-locn{fill:var(--ink);font-family:'Crimson Text',serif;font-weight:700;pointer-events:none}
+.hex-locn-bg{fill:none;stroke:rgba(255,255,255,.9);stroke-width:3;font-family:'Crimson Text',serif;font-weight:700;pointer-events:none}
+.hex-coord{fill:rgba(30,14,4,.38);font-family:'Crimson Text',serif;pointer-events:none}
+
+/* ── ATTACKER PULSE ANIMATION ── */
+@keyframes hexGlow{
+  0%,100%{stroke:rgba(30,14,4,.28);stroke-width:1.5;filter:none}
+  50%    {stroke:#ffe840;stroke-width:5;filter:brightness(1.5) drop-shadow(0 0 8px #ffe840)}
+}
+.hex-group.attacker .hex-bg{animation:hexGlow .5s ease-in-out 3;animation-fill-mode:forwards}
+
+/* ── BOOM OVERLAY (positioned div over SVG) ── */
+@keyframes boomPop{
+  0%  {transform:translate(-50%,-50%) scale(.15) rotate(-15deg);opacity:1}
+  45% {transform:translate(-50%,-50%) scale(1.5)  rotate(8deg); opacity:1}
+  80% {transform:translate(-50%,-50%) scale(1.25) rotate(0deg); opacity:1}
+  100%{transform:translate(-50%,-50%) scale(1.25) rotate(0deg); opacity:0}
+}
+@keyframes cannonBoom{
+  0%  {transform:translate(-50%,-50%) scale(.1)  rotate(-20deg);opacity:1}
+  40% {transform:translate(-50%,-50%) scale(1.8)  rotate(10deg); opacity:1}
+  80% {transform:translate(-50%,-50%) scale(1.5)  rotate(0deg);  opacity:1}
+  100%{transform:translate(-50%,-50%) scale(1.5)  rotate(0deg);  opacity:0}
+}
+.boom-overlay{
+  position:fixed;pointer-events:none;z-index:500;
+  font-size:2em;line-height:1;
+  animation:boomPop 1.05s ease-out forwards;
+}
+.boom-overlay.cannon{font-size:2.6em;animation:cannonBoom .9s ease-out forwards}
+
+/* ── RIGHT PANEL ── */
+#rp{width:200px;flex-shrink:0;border-left:2px solid var(--pd);background:var(--ppanel);display:flex;flex-direction:column;overflow-y:auto}
+.rsec{padding:8px 10px;border-bottom:1px solid var(--pd)}
+.rsec h3{font-family:'IM Fell English',serif;font-size:.92em;margin-bottom:5px}
+.li{display:flex;align-items:center;gap:5px;margin:2px 0;font-size:.77em}
+.lsw{width:13px;height:13px;border:1px solid rgba(0,0,0,.3);flex-shrink:0;border-radius:2px}
+.lu{width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;flex-shrink:0;border:1.5px solid rgba(0,0,0,.4)}
+
+/* ── BOTTOM BAR ── */
+#actionBar{flex-shrink:0;height:var(--barh);background:var(--ink);border-top:3px solid var(--gold);display:flex;align-items:center;padding:0 14px;gap:12px}
+#activeBadge{font-family:'IM Fell English',serif;font-size:1em;font-weight:700;padding:5px 14px;border-radius:20px;white-space:nowrap;flex-shrink:0;border:2px solid transparent}
+#activeBadge.cb{background:var(--conf);color:#f5ddc8;border-color:#c87050}
+#activeBadge.ub{background:var(--union);color:#c8deff;border-color:#4a70c8}
+#activeBadge.nb{background:rgba(255,255,255,.1);color:var(--parch)}
+#phLbl{color:rgba(255,255,255,.72);font-size:.86em;white-space:nowrap;flex-shrink:0;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.bsp{flex:1}
+#ctrBlock{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+#ctrLbl{color:rgba(255,255,255,.55);font-size:.72em;letter-spacing:.5px}
+#ctrRow{display:flex;align-items:center;gap:6px}
+#counterPips{display:flex;gap:3px;flex-wrap:wrap;max-width:220px}
+.pip{width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4)}
+.pip.filled-u{background:#4a7aff;border-color:#7aaaff}
+.pip.filled-c{background:#d06040;border-color:#f09070}
+#movBar{width:140px;height:12px;background:rgba(255,255,255,.15);border-radius:6px;overflow:hidden}
+#movFill{height:100%;border-radius:6px;transition:width .25s ease}
+#movFill.conf-fill{background:linear-gradient(90deg,#d06040,#f09070)}
+#movFill.union-fill{background:linear-gradient(90deg,#4a7aff,#7aaaff)}
+#counterNum{color:var(--parch);font-size:.9em;font-weight:700;white-space:nowrap}
+#barBtns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── BUTTONS ── */
+button{background:rgba(255,255,255,.15);color:var(--parch);border:1px solid rgba(255,255,255,.25);padding:6px 14px;font-family:'IM Fell English',serif;font-size:.88em;cursor:pointer;border-radius:4px;transition:background .15s,border-color .15s}
+button:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.5)}
+button:disabled{background:rgba(255,255,255,.06);color:rgba(255,255,255,.35);cursor:not-allowed;border-color:transparent}
+.btn-t{background:rgba(40,120,40,.6);border-color:#5aaa5a}.btn-t:hover{background:rgba(40,120,40,.9)}
+.btn-f{background:rgba(160,30,30,.6);border-color:#c05050}.btn-f:hover{background:rgba(160,30,30,.9)}
+.btn-go{background:var(--gold);color:var(--ink);font-weight:700;border-color:#e0a820}.btn-go:hover{background:#daa820}
+.btn-end{background:rgba(80,60,20,.7);border-color:#a08030}.btn-end:hover{background:rgba(80,60,20,1)}
+.btn-qs{background:rgba(15,45,110,.7);border-color:#4a70c8}.btn-qs:hover{background:rgba(15,45,110,1)}
+
+/* ── OVERLAYS ── */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:300}
+.ovbox{background:var(--parch);border:3px solid var(--ink);border-radius:10px;padding:26px 32px;max-width:480px;width:92%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+.ovbox h2{font-family:'IM Fell English',serif;font-size:1.8em;margin-bottom:8px}
+.ovbox p{font-size:.97em;line-height:1.55;margin-bottom:10px}
+.ov-sub{font-size:.84em;font-style:italic;opacity:.7;margin-bottom:16px}
+.hidden{display:none!important}
+
+/* ── INSTRUCTION POPUP ── */
+#instrOv{z-index:350}
+#instrOv .ovbox{max-width:520px;border-color:var(--gold);border-width:3px;text-align:left}
+#instrOv h2{text-align:center;font-size:1.5em;margin-bottom:14px}
+.instr-badge{display:block;text-align:center;padding:4px 0;margin-bottom:14px;font-family:'IM Fell English',serif;font-size:1em;border-radius:4px;letter-spacing:.5px}
+.instr-badge.conf-b{background:var(--conf);color:#f5ddc8}
+.instr-badge.union-b{background:var(--union);color:#c8deff}
+.instr-steps{list-style:none;margin-bottom:18px}
+.instr-steps li{font-size:.95em;line-height:1.55;padding:6px 8px 6px 30px;position:relative;border-bottom:1px dotted rgba(160,110,40,.25)}
+.instr-steps li::before{content:attr(data-n);position:absolute;left:6px;font-weight:700;color:var(--gold);font-family:'IM Fell English',serif;font-size:1.1em}
+.instr-steps li.key{background:rgba(200,149,15,.12);border-radius:3px}
+.instr-steps li.key::before{color:#b83000}
+.instr-steps li b{color:var(--ink)}
+#instrOv .ovbox button{width:100%;padding:10px;font-size:1em;background:var(--ink);color:var(--parch);border:none;margin-top:4px}
+#instrOv .ovbox button:hover{background:#5c2a10}
+
+/* ── T/F POPUP ── */
+#tfOv{z-index:400}
+#tfOv .ovbox{max-width:580px;border-color:var(--gold);border-width:4px}
+#tfOv h2{font-size:1.45em;margin-bottom:8px}
+#tfSideBadge{display:inline-block;padding:4px 20px;border-radius:20px;font-family:'IM Fell English',serif;font-size:1em;font-weight:700;margin-bottom:14px;letter-spacing:.5px}
+#tfSideBadge.conf-badge{background:var(--conf);color:#f5ddc8}
+#tfSideBadge.union-badge{background:var(--union);color:#c8deff}
+#tfQText{background:rgba(255,252,220,.9);border:2px solid var(--pd);border-radius:6px;padding:16px 20px;font-size:1.15em;line-height:1.55;margin-bottom:18px;text-align:left;box-shadow:inset 0 2px 6px rgba(0,0,0,.07)}
+.tf-btns{display:flex;gap:12px;justify-content:center}
+.tf-btns button{flex:1;max-width:180px;padding:10px 8px;font-size:1em;border:none}
+.tf-btns .btn-t{background:#266020;color:#fff}.tf-btns .btn-t:hover{background:#173a12}
+.tf-btns .btn-f{background:#7a2020;color:#fff}.tf-btns .btn-f:hover{background:#521515}
+#tfResult{margin-top:14px;padding:10px 14px;border-radius:5px;font-size:1em;line-height:1.45;font-weight:600;display:none}
+#tfResult.correct{background:rgba(40,120,40,.18);border:1.5px solid #2a7a2a;color:#1a4a1a}
+#tfResult.wrong{background:rgba(160,30,30,.15);border:1.5px solid #8b2020;color:#5c1010}
+#tfContBtn{margin-top:12px;display:none;padding:9px 32px;background:var(--ink);color:var(--parch);border:none;font-size:.98em}
+#tfContBtn:hover{background:#5c2a10}
+
+/* ── PHASE OVERLAY ── */
+#phOv .ovbox{border-color:var(--pd)}
+#phOv h2{font-size:1.6em}
+
+/* ── TURN SUMMARY ── */
+#summaryOv .ovbox{max-width:500px;border-color:var(--gold);border-width:3px;text-align:left;padding:22px 26px}
+#summaryOv h2{text-align:center;font-size:1.55em;margin-bottom:4px}
+#summaryRound{display:block;text-align:center;font-size:.82em;opacity:.65;margin-bottom:12px;font-style:italic}
+#summaryBadge{margin-bottom:14px}
+#summaryBody{display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
+.sum-row{display:flex;align-items:flex-start;gap:10px;padding:8px 11px;border-radius:5px;font-size:.94em;line-height:1.45}
+.sum-row .sum-icon{font-size:1.3em;flex-shrink:0;line-height:1.1}
+.sum-row.good{background:rgba(40,120,40,.13);border:1px solid rgba(40,120,40,.35)}
+.sum-row.danger{background:rgba(160,30,30,.13);border:1px solid rgba(160,30,30,.4)}
+.sum-row.warn{background:rgba(200,130,15,.13);border:1px solid rgba(200,130,15,.35)}
+.sum-row.neutral{background:rgba(200,149,15,.08);border:1px solid rgba(200,149,15,.2)}
+.uc-t{color:var(--union);font-weight:600}.cc-t{color:var(--conf);font-weight:600}
+#summaryBtn{display:block;width:100%;padding:11px;background:var(--ink);color:var(--parch);border:none;font-family:'IM Fell English',serif;font-size:1.05em;cursor:pointer;border-radius:5px;transition:background .15s}
+#summaryBtn:hover{background:#5c2a10}
+
+/* ── GAME OVER ── */
+#goOv .ovbox{border-color:var(--gold);border-width:4px}
+#goOv h2{font-size:2em}
+
+/* ── TERRAIN ICONS ── */
+.terrain-icon { pointer-events: none; }
+.tree-icon  { fill: #1a4a18; opacity: .55; }
+.trunk-icon { fill: #6b3d1a; opacity: .55; }
+.hill-back  { fill: #7a5520; opacity: .38; }
+.hill-front { fill: #5c3d14; opacity: .52; }
+/* dim icons when unit occupies hex so token stays readable */
+.hex-group.has-unit .tree-icon,
+.hex-group.has-unit .trunk-icon,
+.hex-group.has-unit .hill-back,
+.hex-group.has-unit .hill-front { opacity: .22; }
+
+/* ── MOVEMENT COST LABELS ── */
+.mov-cost-bg {
+  fill: none;
+  stroke: rgba(0,0,0,.75);
+  stroke-width: 4;
+  font-family: 'IM Fell English', serif;
+  font-weight: 700;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.mov-cost {
+  fill: #fff;
+  font-family: 'IM Fell English', serif;
+  font-weight: 700;
+  pointer-events: none;
+  text-shadow: 0 0 4px #000;
+}
+
+/* ── TURN BANNER ── */
+.turn-banner{font-family:'IM Fell English',serif;font-size:1.05em;font-weight:700;text-align:center;padding:3px 0;letter-spacing:1px;width:100%;flex-shrink:0;}
+.banner-union{background:var(--union);color:#c8deff;}
+.banner-conf {background:var(--conf); color:#f5ddc8;}
+
+/* ── TIMER DISPLAY ── */
+/* timerDisplay now inside timerFloat — see below */
+
+/* ── CONFEDERATE OBJECTIVE TAKEN — pulsing alarm ── */
+
+
+/* ── FLOATING TIMER ── */
+#timerFloat{
+  position:fixed;
+  bottom:74px;left:12px;
+  display:none;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:250;pointer-events:none;
+}
+#timerInner{
+  background:rgba(20,10,0,.92);
+  border:2px solid rgba(255,255,255,.3);
+  border-radius:12px;padding:12px 22px;
+  text-align:center;min-width:110px;
+  box-shadow:0 4px 24px rgba(0,0,0,.7);
+  transition:border-color .3s;
+}
+#timerLabel{
+  font-family:'IM Fell English',serif;
+  font-size:.78em;color:rgba(255,255,255,.65);
+  letter-spacing:1px;margin-bottom:4px;
+}
+#timerDisplay{
+  font-family:'IM Fell English',serif;
+  font-size:3em;font-weight:700;
+  line-height:1;transition:color .3s;
+}
+#timerBar{
+  width:100%;height:5px;background:rgba(255,255,255,.15);
+  border-radius:3px;overflow:hidden;margin-top:6px;
+}
+#timerFill{
+  height:100%;border-radius:3px;
+  transition:width 1s linear,background .3s;
+  width:100%;background:#7aff7a;
+}
+
+/* ── FIX OBJECTIVE PULSE — use fill animation not stroke ── */
+@keyframes objTaken{
+  0%,100%{fill:#cc2200;filter:drop-shadow(0 0 8px rgba(200,30,0,.9))}
+  50%    {fill:#ff7700;filter:drop-shadow(0 0 18px rgba(255,120,0,.9))}
+}
+.hex-bg.hex-obj-taken{
+  animation:objTaken 1.0s ease-in-out infinite !important;
+  stroke:#ffe040 !important;stroke-width:4 !important;
+}
+.hex-group.selected  .hex-bg.hex-obj-taken{stroke:#fff !important;stroke-width:4 !important}
+.hex-group.reachable .hex-bg.hex-obj-taken{stroke:#00e5ff !important;stroke-width:4 !important}
+
+/* ── HANDOFF OVERLAY ── */
+.handoff-ov {
+  z-index: 600;
+  background: rgba(0,0,0,.92) !important;
+}
+.handoff-ov.handoff-conf {
+  background: rgba(50,10,0,.96) !important;
+}
+.handoff-ov.handoff-union {
+  background: rgba(0,10,50,.96) !important;
+}
+#handoffBox {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 20px; padding: 40px 48px;
+  text-align: center; max-width: 560px; width: 92%;
+}
+#handoffSide {
+  font-family: 'IM Fell English', serif;
+  font-size: 1.3em; letter-spacing: 2px;
+  opacity: .75; color: #fff;
+}
+#handoffName {
+  font-family: 'IM Fell English', serif;
+  font-size: 3em; font-weight: 700;
+  color: #fff; line-height: 1.1;
+  text-shadow: 0 2px 12px rgba(0,0,0,.6);
+}
+#handoffSub {
+  font-size: 1.1em; line-height: 1.55;
+  color: rgba(255,255,255,.72);
+  max-width: 380px;
+}
+.handoff-btn {
+  font-family: 'IM Fell English', serif;
+  font-size: 1.25em; font-weight: 700;
+  padding: 16px 36px; border: none;
+  border-radius: 8px; cursor: pointer;
+  letter-spacing: .5px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.5);
+  transition: transform .1s, box-shadow .1s;
+}
+.handoff-btn:hover {
+  transform: scale(1.04);
+  box-shadow: 0 6px 24px rgba(0,0,0,.6);
+}
+.handoff-btn-conf {
+  background: var(--conf); color: #f5ddc8;
+}
+.handoff-btn-union {
+  background: var(--union); color: #c8deff;
+}
+
+</style>
+</head>
+<body>
+<div id="wrapper">
+<div id="app">
+
+  <!-- ══ HEADER ══════════════════════════════════════ -->
+  <div id="hdr">
+    <div style="display:flex;align-items:baseline">
+      <h1>⚔ Battle of Gettysburg</h1>
+      <span class="sub">&nbsp;— July 1–3, 1863 · 2 Players</span>
+    </div>
+    <div id="hdr-r">
+      <div class="hstat">Round <b id="hRnd">—</b> / 12</div>
+      <div class="hstat"><b id="hPhase">Setup</b></div>
+      <div class="hstat" style="color:#7aadff">✕ Union: <b id="hU">21</b></div>
+      <div class="hstat" style="color:#f5a07a">○ Conf: <b id="hC">21</b></div>
+      <div class="hstat gc">★ Obj: <b id="hObj">0</b>/3</div>
+      <button id="timerToggle" onclick="toggleTimer()">⏱ Timer: ON</button>
+      <button id="fsBtn" onclick="toggleFS()">⛶ Fullscreen</button>
+    </div>
+  </div>
+
+  <!-- ══ MAIN ════════════════════════════════════════ -->
+  <div id="main">
+
+    <!-- BOARD -->
+    <div id="bc">
+      <div class="stag ctag">— Confederate Territory (Rows 1–4) —</div>
+      <div id="turnBanner" class="turn-banner" style="display:none"></div>
+      <svg id="hexMap" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="stag utag">— Union Territory (Rows 6–11) —</div>
+    </div>
+
+    <!-- RIGHT LEGEND -->
+    <div id="rp">
+      <div class="rsec">
+        <h3>🗺 Terrain Costs</h3>
+        <div class="li"><div class="lsw" style="background:var(--grass)"></div>Grass / Water — 1 pt</div>
+        <div class="li"><div class="lsw" style="background:var(--forest)"></div>Forest — 2 pts</div>
+        <div class="li"><div class="lsw" style="background:var(--hill)"></div>Hills — 3 pts</div>
+        <div class="li"><div class="lsw" style="background:var(--city)"></div>City / Camp — 5 pts</div>
+      </div>
+      <div class="rsec">
+        <h3>🪖 Units &amp; Markers</h3>
+        <div class="li"><div class="lu" style="background:var(--union);color:#c8deff">★</div><span style="color:#4a7aff">Union unit</span></div>
+        <div class="li"><div class="lu" style="background:var(--conf);color:#f5ddc8">⚔</div><span style="color:#c86030">Confederate unit</span></div>
+        <div class="li"><div class="lsw" style="background:var(--gold);border-color:#8b6000"></div>Objective (capture to win)</div>
+        <div class="li"><div style="width:13px;height:13px;outline:2px solid #00e5ff;border-radius:2px"></div>Reachable hex (move)</div>
+        <div class="li"><div style="width:13px;height:13px;outline:2px solid red;border-radius:2px"></div>Cannonade target</div>
+      </div>
+      <div class="rsec" style="font-size:.78em;line-height:1.5">
+        <h3>⚔ Battle Rules</h3>
+        Remove an enemy unit if:<br><br>
+        <b>1.</b> Your units are on <b>opposite sides</b> of it (N/S, E/W, or diagonal).<br><br>
+        <b>2.</b> It borders <b>2+ of your units</b> AND at least one of yours is on a <b style="color:var(--hill)">hill</b> tile.
+      </div>
+      <div class="rsec" style="font-size:.78em;line-height:1.5">
+        <h3>🎴 True &amp; False Rules</h3>
+        <b>✓ Correct:</b> You earn a <b>Cannonade</b>.<br><br>
+        <b>✗ Wrong:</b> Your <b>opponent</b> earns the Cannonade instead as a penalty.<br><br>
+        <span style="opacity:.7">Each player answers privately on screen.</span>
+      </div>
+      <div class="rsec" style="font-size:.78em;line-height:1.5;flex:1">
+        <h3>🏆 How to Win</h3>
+        <b>Confederate wins:</b><br>
+        Capture 3 ★ objectives, OR land 2 units on 2 objectives at once.<br><br>
+        <b>Union wins:</b><br>
+        Survive all 12 rounds, or eliminate all Confederate units.
+      </div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- ══ BOTTOM ACTION BAR ═══════════════════════════ -->
+  <div id="actionBar">
+    <div id="activeBadge" class="neutral-b">—</div>
+    <span id="phLbl" style="color:rgba(255,255,255,.7);font-size:.88em"></span>
+    <div class="bsp"></div>
+    <div id="counterBlock">
+      <div id="counterLabel"></div>
+      <div id="counterRow">
+        <div id="counterPips"></div>
+        <div id="movBar" style="display:none"><div id="movFill"></div></div>
+        <span id="counterNum"></span>
+      </div>
+    </div>
+    <div class="bsp"></div>
+    <div id="barBtns"></div>
+  </div>
+
+</div><!-- /app -->
+</div><!-- /wrapper -->
+
+
+<!-- ══ FLOATING TIMER ═══════════════════════════════════════════ -->
+<div id="timerFloat" style="display:none">
+  <div id="timerInner">
+    <div id="timerLabel">⏱ Move Timer</div>
+    <div id="timerDisplay">60</div>
+    <div id="timerBar"><div id="timerFill"></div></div>
+  </div>
+</div>
+
+<!-- ══ INSTRUCTION POPUP ════════════════════════════ -->
+<div class="ov hidden" id="instrOv">
+  <div class="ovbox">
+    <h2 id="instrTitle">—</h2>
+    <span id="instrBadge" class="instr-badge" style="display:none"></span>
+    <ul class="instr-steps" id="instrStepsList"></ul>
+    <button onclick="closeInstrPopup()">Got It — Let's Go! ▶</button>
+  </div>
+</div>
+
+<!-- ══ TRUE / FALSE POPUP ═══════════════════════════ -->
+<div class="ov hidden" id="tfOv">
+  <div class="ovbox">
+    <h2>🎴 History Challenge</h2>
+    <div id="tfSideBadge">—</div>
+    <div id="tfQText">—</div>
+    <div class="tf-btns" id="tfBtnsRow">
+      <button class="btn-t" onclick="answerTF(true)">✔ TRUE</button>
+      <button class="btn-f" onclick="answerTF(false)">✘ FALSE</button>
+    </div>
+    <div id="tfResult"></div>
+    <button id="tfContBtn" onclick="closeTFOverlay()">Continue ▶</button>
+  </div>
+</div>
+
+<!-- ══ PHASE TRANSITION OVERLAY ════════════════════ -->
+<div class="ov hidden" id="phOv">
+  <div class="ovbox">
+    <h2 id="poTitle">—</h2>
+    <p id="poMsg"></p>
+    <p class="ov-sub" id="poSub"></p>
+    <button onclick="closePhaseOverlay()" style="background:var(--ink);color:var(--parch);border:none;padding:9px 28px;font-size:.98em">Continue ▶</button>
+  </div>
+</div>
+
+<!-- ══ TURN SUMMARY OVERLAY ═══════════════════════════ -->
+<div class="ov hidden" id="summaryOv">
+  <div class="ovbox">
+    <h2 id="summaryTitle">—</h2>
+    <span id="summaryRound"></span>
+    <div id="summaryBadge" class="instr-badge"></div>
+    <div id="summaryBody"></div>
+    <button id="summaryBtn" onclick="endBattle()">▶ Next Turn</button>
+  </div>
+</div>
+
+<!-- ══ HANDOFF OVERLAY ══════════════════════════════════════════ -->
+<div class="ov hidden" id="handoffOv">
+  <div id="handoffBox">
+    <div id="handoffSide">—</div>
+    <div id="handoffName">—</div>
+    <div id="handoffSub">Hand the device to the other player, then press the button below.</div>
+    <button id="handoffBtn" class="handoff-btn">Ready!</button>
+  </div>
+</div>
+
+<!-- ══ GAME OVER OVERLAY ════════════════════════════ -->
+<div class="ov hidden" id="goOv">
+  <div class="ovbox">
+    <h2 id="goTitle">Battle Over!</h2>
+    <p id="goMsg" style="margin:8px 0 12px"></p>
+    <div id="recapBody" style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px;text-align:left"></div>
+    <button onclick="location.reload()" style="background:var(--ink);color:var(--parch);border:none;padding:9px 28px;font-size:.98em">⟳ Play Again</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ─── CONSTANTS ────────────────────────────────────────────────────
+const COLS=13,ROWS=11,LTR='ABCDEFGHIJKLM';
+const MAX_UNITS=21,MAX_MOV=12,MAX_ROUNDS=12;
+const PHASE_TIMES={tf:45,cannon:30,summary:15};
+const TERRAIN={
+  G:{cost:1,cls:'grass'},F:{cost:2,cls:'forest'},
+  H:{cost:3,cls:'hill'}, C:{cost:5,cls:'city'}, W:{cost:1,cls:'water'},
+};
+const TMAP=[
+//A    B    C    D    E    F    G    H    I    J    K    L    M
+  ['G','G','F','F','G','F','G','G','G','G','G','G','G'],  // row 0 conf back
+  ['G','F','F','G','G','G','F','F','G','G','G','G','G'],  // row 1 conf
+  ['G','G','F','G','F','G','G','G','G','F','G','G','G'],  // row 2 conf
+  ['G','G','G','G','G','F','F','G','G','G','G','F','G'],  // row 3 conf front
+  ['G','F','G','F','F','G','G','G','G','G','G','G','G'],  // row 4 neutral
+  ['F','G','G','F','F','F','F','G','G','F','F','G','G'],  // row 5 union (forest clump d-g between objectives)
+  ['G','G','H','H','F','G','H','H','G','G','G','F','G'],  // row 6 foothills
+  ['G','H','H','H','H','H','H','H','H','G','G','C','G'],  // row 7 MAIN RIDGE b-i
+  ['G','G','H','G','H','G','H','H','H','H','H','G','G'],  // row 8 taper + barrier cols i-k
+  ['G','G','H','G','F','F','G','G','H','H','H','G','F'],  // row 9 — Cemetery Ridge c2  Culps Hill c8  right flank j-k
+  ['G','G','G','G','G','F','G','G','G','G','F','F','G'],  // row 10 open — no hills at bottom
+];
+const LOCATIONS=[
+  [7,11,'Gettysburg'],[9,2,'Cemetery Ridge'],[9,8,"Culp's Hill"],
+];
+const OBJECTIVES=[[7,11],[9,2],[9,8]];
+const TF_CARDS=[
+  {q:"The Battle of Gettysburg took place in early July 1863.",a:true},
+  {q:"Gettysburg is located in Pennsylvania.",a:true},
+  {q:"The Battle of Gettysburg is often called the turning point of the Civil War.",a:true},
+  {q:"The Union Army at Gettysburg was led by General Stonewall Jackson.",a:false},
+  {q:"The Confederate Army at Gettysburg was commanded by General Robert E. Lee.",a:true},
+  {q:"Lee hoped to invade the North to gain supplies and reduce pressure on the South.",a:true},
+  {q:"One of Lee's goals was to convince European countries to support the Union.",a:false},
+  {q:"The fighting began on July 1 because Confederate troops encountered Union cavalry.",a:true},
+  {q:"On July 1, Union soldiers pushed the Confederates out of Gettysburg.",a:false},
+  {q:"Cemetery Hill and Cemetery Ridge provided the Union army with strong defensive positions.",a:true},
+  {q:"On July 2, Lee attempted to attack both ends of the Union line.",a:true},
+  {q:"Little Round Top and Devil's Den were important fighting locations on the second day.",a:true},
+  {q:"The Confederates completely broke through the Union line on July 2.",a:false},
+  {q:"Pickett's Charge occurred on July 3.",a:true},
+  {q:"Pickett's Charge involved about 12,000 Confederate soldiers.",a:true},
+  {q:"Pickett's Charge was a major Confederate success.",a:false},
+  {q:"Lee retreated back to Virginia after the failure of Pickett's Charge.",a:true},
+  {q:"The Battle of Gettysburg resulted in over 50,000 casualties.",a:true},
+  {q:"The Union victory at Gettysburg, combined with the victory at Vicksburg, was a major turning point.",a:true},
+  {q:"Abraham Lincoln delivered the Gettysburg Address to dedicate a cemetery for fallen soldiers.",a:true},
+  {q:"The Battle of Gettysburg lasted exactly one week.",a:false},
+  {q:"General Meade had only been in command of the Union army for a few days before Gettysburg.",a:true},
+  {q:"The Confederate Army of Northern Virginia was outnumbered at Gettysburg.",a:false},
+  {q:"Little Round Top was nearly left undefended on July 2.",a:true},
+  {q:"The 20th Maine Infantry played a key role defending Little Round Top.",a:true},
+  {q:"Pickett's Charge is also known as the Pickett-Pettigrew-Trimble Assault.",a:true},
+  {q:"General James Longstreet strongly supported the plan for Pickett's Charge.",a:false},
+  {q:"The Wheatfield changed hands multiple times on July 2.",a:true},
+  {q:"Devil's Den was used as a position by Confederate sharpshooters.",a:true},
+  {q:"The Union army occupied high ground known as the Fish Hook line.",a:true},
+  {q:"Lee's invasion of the North was partly intended to relieve pressure on Vicksburg.",a:true},
+  {q:"The Battle of Gettysburg was the last major Confederate offensive in the North.",a:true},
+  {q:"Over 160,000 soldiers fought at Gettysburg.",a:true},
+  {q:"The Gettysburg Address was delivered on November 19, 1863.",a:true},
+  {q:"Lincoln's Gettysburg Address was immediately praised by all major newspapers.",a:false},
+  {q:"General John Buford's Union cavalry delayed the Confederate advance on July 1.",a:true},
+  {q:"Culp's Hill was captured by Confederate forces on July 3.",a:false},
+  {q:"After Gettysburg, Lee offered his resignation to Confederate President Jefferson Davis.",a:true},
+  {q:"The Gettysburg Address is exactly 272 words long.",a:true},
+];
+
+// ─── INSTRUCTION CONTENT ──────────────────────────────────────────
+const INSTRS={
+  su:{title:'⚑ Setup — Union Places First',badge:{cls:'union-b',text:'Union ✕ — Place Your Troops'},steps:[
+    {key:true,n:'①',html:'<b>Union player:</b> Place all 21 units (✕) on the <b>southern half</b> of the board — rows 7–11 only.'},
+    {key:false,n:'②',html:'Click any dashed-border hex to place a unit. Click a placed unit to remove it.'},
+    {key:false,n:'③',html:'You must place all 21 before Confederates can set up.'},
+    {key:false,n:'💡',html:'<b>Tip:</b> Defend the <b>gold-highlighted</b> objective hexes — Gettysburg, Cemetery Ridge, and Culp\'s Hill.'},
+  ]},
+  sc:{title:'⚑ Setup — Confederate Places',badge:{cls:'conf-b',text:'Confederate ○ — Place Your Troops'},steps:[
+    {key:true,n:'①',html:'<b>Confederate player:</b> Place all 21 units (○) on the <b>northern half</b> — rows 1–5 only.'},
+    {key:false,n:'②',html:'Click any dashed-border hex to place. Click a placed unit to remove it.'},
+    {key:false,n:'③',html:'When all 21 are placed, click <b>Begin Battle ▶</b> in the action bar.'},
+    {key:false,n:'💡',html:'<b>Tip:</b> Capture 3 <b>gold-highlighted</b> objectives to win, OR land 2 units on 2 different objectives at once for an instant victory.'},
+  ]},
+  tf_c:{title:'🎴 Step 1 — History Challenge',badge:{cls:'conf-b',text:'Confederate ○ — Answer the Question'},steps:[
+    {key:true,n:'①',html:'A history question will pop up. <b>Confederate player:</b> answer it on screen.'},
+    {key:true,n:'✓',html:'<b>Correct:</b> You earn a <b>Cannonade</b> — remove one enemy unit in an adjacent hex.'},
+    {key:true,n:'✗',html:'<b>Wrong:</b> Union earns the Cannonade as a <b>penalty</b> against you.'},
+    {key:false,n:'→',html:'After the cannonade phase, move to Step 2: Movement.'},
+  ]},
+  tf_u:{title:'🎴 Step 1 — History Challenge',badge:{cls:'union-b',text:'Union ✕ — Answer the Question'},steps:[
+    {key:true,n:'①',html:'A history question will pop up. <b>Union player:</b> answer it on screen.'},
+    {key:true,n:'✓',html:'<b>Correct:</b> You earn a <b>Cannonade</b> — remove one enemy unit in an adjacent hex.'},
+    {key:true,n:'✗',html:'<b>Wrong:</b> Confederate earns the Cannonade as a <b>penalty</b> against you.'},
+    {key:false,n:'→',html:'After the cannonade phase, move to Step 2: Movement.'},
+  ]},
+  cn_c:{title:'💥 Cannonade — Confederate Fires!',badge:{cls:'conf-b',text:'Confederate ○ — Choose Your Target'},steps:[
+    {key:true,n:'①',html:'You answered correctly! Enemy hexes you can hit are outlined in <b style="color:#c00">RED</b>.'},
+    {key:true,n:'②',html:'Click any red-outlined Union (✕) hex to remove that unit.'},
+    {key:false,n:'③',html:'Target must be in a hex directly adjacent (sharing an edge) to one of your units.'},
+  ]},
+  cn_u:{title:'💥 Cannonade — Union Fires!',badge:{cls:'union-b',text:'Union ✕ — Choose Your Target'},steps:[
+    {key:true,n:'①',html:'You answered correctly! Enemy hexes you can hit are outlined in <b style="color:#c00">RED</b>.'},
+    {key:true,n:'②',html:'Click any red-outlined Confederate (○) hex to remove that unit.'},
+    {key:false,n:'③',html:'Target must be in a hex directly adjacent to one of your units.'},
+  ]},
+  pn_c:{title:'⚠ Penalty — Confederate Fires!',badge:{cls:'conf-b',text:'Confederate ○ — Penalty Shot'},steps:[
+    {key:true,n:'⚠',html:'Union answered <b>incorrectly</b>! Confederate earns a penalty cannonade.'},
+    {key:true,n:'①',html:'<b>Confederate ○:</b> click any red-outlined Union (✕) hex to remove that unit.'},
+  ]},
+  pn_u:{title:'⚠ Penalty — Union Fires!',badge:{cls:'union-b',text:'Union ✕ — Penalty Shot'},steps:[
+    {key:true,n:'⚠',html:'Confederate answered <b>incorrectly</b>! Union earns a penalty cannonade.'},
+    {key:true,n:'①',html:'<b>Union ✕:</b> click any red-outlined Confederate (○) hex to remove that unit.'},
+  ]},
+  mv_c:{title:'⚔ Step 2 — Confederate Movement',badge:{cls:'conf-b',text:'Confederate ○ — Move Your Units'},steps:[
+    {key:true,n:'①',html:'<b>Confederate ○:</b> You have <b>12 movement points</b> to spend across all units this turn.'},
+    {key:true,n:'②',html:'Click one of your ○ units to select it — reachable hexes glow <b style="color:#00e5ff">cyan</b>.'},
+    {key:false,n:'③',html:'Click a cyan hex to move there. Points are deducted by terrain cost.'},
+    {key:false,n:'④',html:'Move multiple units. Click a selected unit again to deselect without moving.'},
+    {key:false,n:'⑤',html:'<b>Terrain costs:</b> Grass/Water=1 · Forest=2 · Hills=3 · City/Camp=5'},
+    {key:false,n:'⑥',html:'Click <b>End Movement ▶</b> when done.'},
+  ]},
+  mv_u:{title:'⚔ Step 2 — Union Movement',badge:{cls:'union-b',text:'Union ✕ — Move Your Units'},steps:[
+    {key:true,n:'①',html:'<b>Union ✕:</b> You have <b>12 movement points</b> to spend across all units this turn.'},
+    {key:true,n:'②',html:'Click one of your ✕ units to select it — reachable hexes glow <b style="color:#00e5ff">cyan</b>.'},
+    {key:false,n:'③',html:'Click a cyan hex to move there. Points are deducted by terrain cost.'},
+    {key:false,n:'④',html:'Move multiple units. Click a selected unit again to deselect without moving.'},
+    {key:false,n:'⑤',html:'<b>Terrain costs:</b> Grass/Water=1 · Forest=2 · Hills=3 · City/Camp=5'},
+    {key:false,n:'⑥',html:'Click <b>End Movement ▶</b> when done.'},
+  ]},
+  bt_c:{title:'⚔ Step 3 — Battle (Auto-Resolved)',badge:{cls:'conf-b',text:'Confederate ○ — Battle Phase'},steps:[
+    {key:true,n:'⚔',html:'The game automatically checks for captures after Confederate movement.'},
+    {key:false,n:'①',html:'A unit is <b>captured</b> if enemy units are on <b>opposite sides</b> along any of the 3 hex axes.'},
+    {key:false,n:'②',html:'A unit is also captured if it touches <b>2+ enemy units</b> and at least one is on a <b style="color:var(--hill)">hill</b>.'},
+    {key:false,n:'③',html:'Captured units are removed. A turn summary will appear.'},
+  ]},
+  bt_u:{title:'⚔ Step 3 — Battle (Auto-Resolved)',badge:{cls:'union-b',text:'Union ✕ — Battle Phase'},steps:[
+    {key:true,n:'⚔',html:'The game automatically checks for captures after Union movement.'},
+    {key:false,n:'①',html:'A unit is <b>captured</b> if enemy units are on <b>opposite sides</b> along any of the 3 hex axes.'},
+    {key:false,n:'②',html:'A unit is also captured if it touches <b>2+ enemy units</b> and at least one is on a <b style="color:var(--hill)">hill</b>.'},
+    {key:false,n:'③',html:'Captured units are removed. A turn summary will appear.'},
+  ]},
+};
+
+// ─── HEX MATH ─────────────────────────────────────────────────────
+const HEX={s:32};
+const SQ3=Math.sqrt(3);
+
+function hexPoints(cx,cy,s){
+  const p=[];
+  for(let i=0;i<6;i++){
+    const a=Math.PI/180*(60*i-30); // pointy-top
+    p.push((cx+s*Math.cos(a)).toFixed(2)+','+(cy+s*Math.sin(a)).toFixed(2));
+  }
+  return p.join(' ');
+}
+function hexCenter(r,c,s){
+  const cx=c*SQ3*s+(r%2===1?SQ3*s/2:0);
+  const cy=r*1.5*s+s;
+  return{cx,cy};
+}
+// Even-r offset, pointy-top hex neighbors
+function hexNeighbors(r,c){
+  const dirs=r%2===0
+    ?[[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+    :[[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+  return dirs.map(([dr,dc])=>[r+dr,c+dc])
+    .filter(([nr,nc])=>nr>=0&&nr<ROWS&&nc>=0&&nc<COLS);
+}
+// 3 opposite-pair axes for flanking
+function hexOppPairs(r,c){
+  const e=r%2===0;
+  return[
+    [[r,c-1],[r,c+1]],
+    [e?[r-1,c-1]:[r-1,c],   e?[r+1,c]:[r+1,c+1]],
+    [e?[r-1,c]  :[r-1,c+1], e?[r+1,c-1]:[r+1,c]],
+  ].filter(([[r1,c1],[r2,c2]])=>
+    r1>=0&&r1<ROWS&&c1>=0&&c1<COLS&&r2>=0&&r2<ROWS&&c2>=0&&c2<COLS
+  );
+}
+// Show 💥 overlay div positioned over hex center on screen
+function showBoomAt(r,c,extraCls){
+  const svg=el('hexMap');
+  const ctm=svg.getScreenCTM();
+  if(!ctm)return;
+  const{cx,cy}=hexCenter(r,c,HEX.s);
+  // Use SVG's own transform matrix to map SVG coords → screen coords
+  const pt=svg.createSVGPoint();
+  pt.x=cx; pt.y=cy;
+  const screen=pt.matrixTransform(ctm);
+  const boom=document.createElement('div');
+  boom.className='boom-overlay'+(extraCls?' '+extraCls:'');
+  boom.textContent='💥';
+  boom.style.left=screen.x+'px';
+  boom.style.top =screen.y+'px';
+  document.body.appendChild(boom);
+  setTimeout(()=>{if(boom.parentNode)boom.remove();},1150);
+}
+
+// ─── STATE ────────────────────────────────────────────────────────
+const G={
+  phase:'su',round:1,grid:[],sel:null,reach:[],movPts:MAX_MOV,moveStack:[],
+  uPlaced:0,cPlaced:0,tfDeck:[],tfIdx:0,tfSide:null,canMode:false,
+  timerOn:true,timerSec:0,_timerMax:60,_timerInterval:null,_timerExpire:null,
+  recap:{confCap:0,unionCap:0,confQRight:0,unionQRight:0,roundsPlayed:0},
+  _pendingCannon:null,_instrCb:null,_phOvCb:null,
+};
+
+// ─── RESIZE ───────────────────────────────────────────────────────
+function resize(){
+  const svg=el('hexMap');if(!svg)return;
+  const hdrH=el('hdr').offsetHeight;
+  const barH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--barh'))||68;
+  const rpW=el('rp')?el('rp').offsetWidth:200;
+  const avW=window.innerWidth-rpW-24;
+  const avH=window.innerHeight-hdrH-barH-36;
+  const sW=avW/(COLS*SQ3+SQ3/2);
+  const sH=avH/(ROWS*1.5+0.5);
+  HEX.s=Math.max(18,Math.min(sW,sH,72));
+  const s=HEX.s,PAD=s*0.55;
+  const vbW=COLS*SQ3*s+SQ3*s/2+PAD*2;
+  const vbH=ROWS*1.5*s+s*0.5+PAD*2;
+  svg.setAttribute('viewBox',(-PAD)+' '+(-PAD)+' '+vbW+' '+vbH);
+}
+
+// ─── GRID INIT ────────────────────────────────────────────────────
+function initGrid(){
+  for(let r=0;r<ROWS;r++){
+    G.grid[r]=[];
+    for(let c=0;c<COLS;c++)
+      G.grid[r][c]={t:TMAP[r][c],u:null,obj:OBJECTIVES.some(([or,oc])=>or===r&&oc===c)};
+  }
+}
+
+// ─── BUILD DOM ────────────────────────────────────────────────────
+function buildDOM(){
+  const svg=el('hexMap');svg.innerHTML='';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.id='c'+r+'_'+c;
+      g.dataset.r=r; g.dataset.c=c;
+      g.addEventListener('click',function(){clickCell(+this.dataset.r,+this.dataset.c);});
+      svg.appendChild(g);
+    }
+  }
+  resize();renderAll();
+  setBarSetup('u');
+  showInstrPopup('su',()=>{});
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────
+function renderAll(){
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)renderCell(r,c);
+  updateHeader();updateActionBar();
+}
+function renderCell(r,c){
+  const g=el('c'+r+'_'+c);if(!g)return;
+  const d=G.grid[r][c];
+  const s=HEX.s;
+  const{cx,cy}=hexCenter(r,c,s);
+  // State classes
+  const cls=['hex-group'];
+  if(G.sel&&G.sel.r===r&&G.sel.c===c)cls.push('selected');
+  if(G.reach.some(x=>x.r===r&&x.c===c))cls.push('reachable');
+  if(G.canMode&&isTgt(r,c))cls.push('cantgt');
+  if(G.phase==='su'&&r>=5&&!d.u)cls.push('vsetup');
+  if(G.phase==='sc'&&r<4 &&!d.u)cls.push('vsetup');
+  if(d.u)cls.push('has-unit');
+  g.setAttribute('class',cls.join(' '));
+  const pts=hexPoints(cx,cy,s);
+  const fs =Math.max(8,Math.round(s*0.34));
+  const lfs=Math.max(7,Math.round(s*0.26));   // bigger location font
+  const cfs=Math.max(4,Math.round(s*0.145));
+  const ur =Math.round(s*0.38);
+  const loc=LOCATIONS.find(([lr,lc])=>lr===r&&lc===c);
+  let h='';
+  // Hex background — gold fill for objectives, normal terrain otherwise
+  const confOnObj=d.obj&&d.u==='c';
+  if(d.obj){
+    h+='<polygon class="hex-bg '+TERRAIN[d.t].cls+' hex-obj'+(confOnObj?' hex-obj-taken':'')+'" points="'+pts+'"/>';
+  } else {
+    h+='<polygon class="hex-bg '+TERRAIN[d.t].cls+'" points="'+pts+'"/>';
+  }
+  // Terrain icons — drawn BEFORE unit token so unit sits on top
+  const ir=Math.round(s*0.38); // icon radius / scale reference
+  if(d.t==='F'){
+    // Tree group: two small trees offset slightly
+    const tx=[cx-ir*0.28, cx+ir*0.28];
+    tx.forEach((tx0,ti)=>{
+      const th=ir*(1+ti*0.15); // slight size variation
+      const tr=ir*0.38+ti*ir*0.04;
+      const ty0=cy+ir*0.32-ti*ir*0.1;
+      // canopy triangle
+      h+='<polygon class="terrain-icon tree-icon" points="'
+        +(tx0)+','+(ty0-th)+' '+(tx0-tr)+','+(ty0)+' '+(tx0+tr)+','+(ty0)+'"/>';
+      // trunk
+      h+='<rect class="terrain-icon trunk-icon" x="'+(tx0-ir*0.06)+'" y="'+ty0+'" width="'+(ir*0.12)+'" height="'+(ir*0.22)+'"/>';
+    });
+  } else if(d.t==='H'){
+    // Mountain: back peak + front peak, layered
+    const mw=ir*1.1; const mh=ir*0.92; const my=cy+ir*0.38;
+    // back peak (slightly left, lighter)
+    h+='<polygon class="terrain-icon hill-back" points="'
+      +(cx-mw*0.18)+','+(my-mh*0.78)+' '+(cx-mw*0.88)+','+(my)+' '+(cx+mw*0.22)+','+(my)+'"/>';
+    // front peak (center, darker)
+    h+='<polygon class="terrain-icon hill-front" points="'
+      +(cx+mw*0.14)+','+(my-mh)+' '+(cx-mw*0.38)+','+(my)+' '+(cx+mw*0.78)+','+(my)+'"/>';
+  }
+  // Coordinate label (tiny, at bottom)
+  h+='<text class="hex-coord" x="'+cx.toFixed(1)+'" y="'+(cy+s*0.8).toFixed(1)+'" text-anchor="middle" font-size="'+cfs+'">'+LTR[c]+(r+1)+'</text>';
+  // Movement cost label — only on reachable hexes during movement phase
+  const movPhase=(G.phase==='mv_c'||G.phase==='mv_u');
+  const reachEntry=movPhase?G.reach.find(x=>x.r===r&&x.c===c):null;
+  if(reachEntry){
+    const costFs=Math.max(10,Math.round(s*0.38));
+    const costY=(cy+costFs*0.38).toFixed(1);
+    // White outline for legibility on any terrain
+    h+='<text class="mov-cost-bg" x="'+cx.toFixed(1)+'" y="'+costY+'" text-anchor="middle" dominant-baseline="central" font-size="'+costFs+'">'+reachEntry.cost+'</text>';
+    h+='<text class="mov-cost" x="'+cx.toFixed(1)+'" y="'+costY+'" text-anchor="middle" dominant-baseline="central" font-size="'+costFs+'">'+reachEntry.cost+'</text>';
+  }
+  // Location name (with white outline for legibility) — larger font
+  if(loc){
+    const words=loc[2].split(' ');
+    const lines=words.length<=2?[loc[2]]:
+      [words.slice(0,Math.ceil(words.length/2)).join(' '),words.slice(Math.ceil(words.length/2)).join(' ')];
+    const startY=lines.length>1?cy-lfs*0.5:cy+lfs*0.2;
+    lines.forEach((line,i)=>{
+      const ly=(startY+i*lfs*1.3).toFixed(1);
+      h+='<text class="hex-locn-bg" x="'+cx.toFixed(1)+'" y="'+ly+'" text-anchor="middle" font-size="'+lfs+'">'+line+'</text>';
+      h+='<text class="hex-locn"    x="'+cx.toFixed(1)+'" y="'+ly+'" text-anchor="middle" font-size="'+lfs+'">'+line+'</text>';
+    });
+  }
+  // Unit token
+  if(d.u){
+    const uc=d.u==='u'?'union':'conf';
+    h+='<circle class="hex-unit-bg '+uc+'" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+ur+'"/>';
+    h+='<text class="hex-unit-txt '+uc+'-txt" x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" text-anchor="middle" dominant-baseline="central" font-size="'+fs+'">'+(d.u==='u'?'✕':'○')+'</text>';
+  }
+  g.innerHTML=h;
+}
+
+// ─── HEADER ───────────────────────────────────────────────────────
+function updateHeader(){
+  const banner=el('turnBanner');
+  if(banner){
+    const bmap={su:'🔵 Union — Place Troops',sc:'⬛ Confederate — Place Troops',
+      tf_c:'⬛ Confederate Turn',cn_c:'⬛ Confederate — Cannonade!',pn_c:'⬛ Confederate — Penalty!',
+      mv_c:'⬛ Confederate — Move Units',bt_c:'⬛ Confederate — Battle',
+      tf_u:'🔵 Union Turn',cn_u:'🔵 Union — Cannonade!',pn_u:'🔵 Union — Penalty!',
+      mv_u:'🔵 Union — Move Units',bt_u:'🔵 Union — Battle',ov:''};
+    const txt=bmap[G.phase]||'';
+    const conf=G.phase&&(G.phase.endsWith('_c')||G.phase==='sc');
+    banner.textContent=txt;
+    banner.className='turn-banner '+(conf?'banner-conf':'banner-union');
+    banner.style.display=txt?'block':'none';
+  }
+  const uc=countUnits('u'),cc=countUnits('c'),obj=countObj();
+  el('hRnd').textContent=G.round;
+  el('hU').textContent=uc;el('hC').textContent=cc;el('hObj').textContent=obj;
+  const pn={su:'Setup',sc:'Setup',tf_c:'Conf T&F',cn_c:'Conf Cannon',pn_c:'⚠ Penalty',mv_c:'Conf Move',bt_c:'Conf Battle',
+             tf_u:'Union T&F',cn_u:'Union Cannon',pn_u:'⚠ Penalty',mv_u:'Union Move',bt_u:'Union Battle',ov:'Game Over'};
+  el('hPhase').textContent=pn[G.phase]||G.phase;
+}
+
+// ─── ACTION BAR ───────────────────────────────────────────────────
+function setBarSetup(side){
+  const placed=side==='u'?G.uPlaced:G.cPlaced;
+  const isConf=side==='c';
+  const badge=el('activeBadge');
+  badge.textContent=isConf?'Confederate ○':'Union ✕';
+  badge.className=isConf?'cb':'ub';
+  el('phLbl').textContent='Setup — Place Troops ('+placed+' / '+MAX_UNITS+')';
+  el('counterLabel').textContent='UNITS PLACED';
+  el('movBar').style.display='none';
+  const pips=el('counterPips');pips.style.display='flex';pips.innerHTML='';
+  for(let i=0;i<MAX_UNITS;i++){
+    const p=document.createElement('div');
+    p.className='pip'+(i<placed?(isConf?' filled-c':' filled-u'):'');
+    pips.appendChild(p);
+  }
+  el('counterNum').textContent=placed+' / '+MAX_UNITS;
+  el('barBtns').innerHTML=
+    '<button class="btn-qs" onclick="quickStart()">⚑ Quick Start</button>'+
+    '<button onclick="clearBoard()">Clear</button>'+
+    '<button class="btn-go" id="beginBtn" onclick="beginBattle()"'+(G.uPlaced<MAX_UNITS||G.cPlaced<MAX_UNITS?' disabled':'')+'>▶ Begin Battle</button>';
+}
+function setBarMov(side){
+  const isConf=side==='c';
+  el('activeBadge').textContent=isConf?'Confederate ○':'Union ✕';
+  el('activeBadge').className=isConf?'cb':'ub';
+  el('phLbl').textContent='Step 2 — Movement';
+  el('counterLabel').textContent='MOVEMENT POINTS REMAINING';
+  el('counterPips').style.display='none';
+  el('movBar').style.display='block';
+  const fill=el('movFill');
+  fill.className=isConf?'conf-fill':'union-fill';
+  fill.style.width=((G.movPts/MAX_MOV)*100)+'%';
+  el('counterNum').textContent=G.movPts+' / '+MAX_MOV+' pts';
+  el('barBtns').innerHTML='<button id="undoBtn" onclick="undoMove()" disabled>↩ Undo</button>&nbsp;<button class="btn-end" onclick="endMov()">End Movement ▶</button>';
+}
+function setBarCannon(side,penalty){
+  el('activeBadge').textContent=side==='c'?'Confederate ○':'Union ✕';
+  el('activeBadge').className=side==='c'?'cb':'ub';
+  el('phLbl').textContent=penalty?'⚠ Penalty Cannonade':'💥 Cannonade!';
+  el('counterLabel').textContent='';
+  el('counterPips').style.display='none';el('movBar').style.display='none';
+  el('counterNum').textContent='';
+  el('barBtns').innerHTML='<button onclick="skipCannon()">Skip Cannonade</button>';
+}
+function setBarBattle(side){
+  el('activeBadge').textContent=side==='c'?'Confederate ○':'Union ✕';
+  el('activeBadge').className=side==='c'?'cb':'ub';
+  el('phLbl').textContent='Step 3 — Battle resolving…';
+  el('counterLabel').textContent='';
+  el('counterPips').style.display='none';el('movBar').style.display='none';
+  el('counterNum').textContent='';el('barBtns').innerHTML='';
+}
+function updateActionBar(){
+  const p=G.phase;
+  if(p==='su')return setBarSetup('u');if(p==='sc')return setBarSetup('c');
+  if(p==='mv_c')return setBarMov('c');if(p==='mv_u')return setBarMov('u');
+  if(p==='cn_c')return setBarCannon('c',false);if(p==='cn_u')return setBarCannon('u',false);
+  if(p==='pn_c')return setBarCannon('c',true); if(p==='pn_u')return setBarCannon('u',true);
+  if(p==='bt_c')return setBarBattle('c');if(p==='bt_u')return setBarBattle('u');
+  if(p==='tf_c'||p==='tf_u'){
+    const isConf=p==='tf_c';
+    el('activeBadge').textContent=isConf?'Confederate ○':'Union ✕';
+    el('activeBadge').className=isConf?'cb':'ub';
+    el('phLbl').textContent='Step 1 — History Challenge';
+    el('counterLabel').textContent='';el('counterPips').style.display='none';
+    el('movBar').style.display='none';el('counterNum').textContent='';el('barBtns').innerHTML='';
+  }
+}
+
+// ─── INSTRUCTION POPUP ────────────────────────────────────────────
+function showInstrPopup(key,cb){
+  const def=INSTRS[key];if(!def){if(cb)cb();return;}
+  el('instrTitle').textContent=def.title;
+  const badge=el('instrBadge');
+  if(def.badge){badge.textContent=def.badge.text;badge.className='instr-badge '+def.badge.cls;badge.style.display='block';}
+  else badge.style.display='none';
+  const ul=el('instrStepsList');ul.innerHTML='';
+  def.steps.forEach(s=>{
+    const li=document.createElement('li');
+    li.setAttribute('data-n',s.n);li.innerHTML=s.html;
+    if(s.key)li.classList.add('key');
+    ul.appendChild(li);
+  });
+  G._instrCb=cb||null;
+  el('instrOv').classList.remove('hidden');
+}
+function closeInstrPopup(){
+  el('instrOv').classList.add('hidden');
+  if(G._instrCb){const cb=G._instrCb;G._instrCb=null;cb();}
+}
+
+// ─── SETUP ────────────────────────────────────────────────────────
+function clickCell(r,c){
+  const p=G.phase;
+  if(p==='su'||p==='sc')doSetup(r,c);
+  else if(p==='mv_c'||p==='mv_u')doMove(r,c);
+  else if(p==='cn_c'||p==='cn_u'||p==='pn_c'||p==='pn_u')doCannon(r,c);
+}
+function doSetup(r,c){
+  const d=G.grid[r][c];
+  if(G.phase==='su'){
+    if(r<5){flashBar('Union units go in rows 6–11 (southern two-thirds, dashed hexes).');return;}
+    if(d.u==='u'){d.u=null;G.uPlaced--;}
+    else if(!d.u&&G.uPlaced<MAX_UNITS){d.u='u';G.uPlaced++;}
+    if(G.uPlaced===MAX_UNITS){
+      // FIX 1: set phase BEFORE renderAll so Confederate dashed hints appear immediately
+      G.phase='sc';
+      renderAll();
+      showPhaseOverlay('⚑ Confederate Setup',
+        'Union forces are positioned! Confederates — place your 21 units (○) in rows 1–4.',
+        'Click any dashed hex in the top third (rows 1–4) to place. Click a placed unit to remove it.',
+        // FIX 2: call renderAll in callback so hints appear after overlay closes
+        ()=>showInstrPopup('sc',()=>renderAll()));
+    } else {
+      renderAll();
+      flashBar('Union: place units in rows 6–11. ('+G.uPlaced+'/'+MAX_UNITS+')');
+    }
+  } else {
+    if(r>=4){flashBar('Confederate units go in rows 1–4 (top third, dashed hexes).');return;}
+    if(d.u==='c'){d.u=null;G.cPlaced--;}
+    else if(!d.u&&G.cPlaced<MAX_UNITS){d.u='c';G.cPlaced++;}
+    renderAll();
+    // FIX 3: tell player to click Begin Battle when all 21 placed
+    if(G.cPlaced===MAX_UNITS){
+      flashBar('All 21 Confederate units placed! Click <b>▶ Begin Battle</b> to start.');
+    } else {
+      flashBar('Confederate: place units in rows 1–4. ('+G.cPlaced+'/'+MAX_UNITS+')');
+    }
+  }
+}
+function quickStart(){
+  clearBoard(true);
+  const SCENARIOS=[
+    {
+      name:'Broad Front',
+      desc:'Both armies spread across the full width. Confederate threatens all three objectives simultaneously.',
+      uPos:[[5,1],[5,2],[5,7],[5,8],[6,0],[6,1],[6,5],[6,8],[6,9],[6,10],[7,0],[7,9],[7,10],[8,0],[8,1],[8,3],[8,5],[9,0],[9,1],[9,2],[9,8]],
+      cPos:[[0,0],[0,1],[0,6],[0,7],[0,8],[1,0],[1,3],[1,4],[1,5],[1,8],[1,9],[2,0],[2,1],[2,3],[2,5],[2,6],[2,7],[3,0],[3,2],[3,4],[3,7]],
+    },
+    {
+      name:'Confederate Left Hook',
+      desc:'Confederate masses on the left flank to sweep around Cemetery Ridge. Union must hold both flanks.',
+      uPos:[[5,1],[5,2],[5,7],[5,8],[6,0],[6,1],[6,5],[6,9],[6,10],[7,0],[7,9],[7,10],[8,0],[8,1],[8,3],[9,0],[9,1],[9,2],[9,6],[9,7],[9,8]],
+      cPos:[[0,0],[0,1],[0,4],[1,0],[1,3],[1,4],[1,5],[2,0],[2,1],[2,3],[2,5],[2,6],[3,0],[3,1],[3,2],[3,3],[3,4],[3,7],[3,8],[3,9],[3,10]],
+    },
+    {
+      name:'Confederate Right Hook',
+      desc:'Confederate storms the right flank toward Gettysburg and Culp\'s Hill. Union anchors right.',
+      uPos:[[5,7],[5,8],[5,11],[5,12],[6,0],[6,1],[6,8],[6,9],[6,10],[7,0],[7,9],[7,10],[8,5],[8,11],[8,12],[9,0],[9,1],[9,2],[9,6],[9,7],[9,8]],
+      cPos:[[0,0],[0,6],[0,7],[0,8],[1,0],[1,5],[1,8],[1,9],[1,10],[1,11],[2,5],[2,6],[2,7],[2,8],[2,11],[3,0],[3,2],[3,7],[3,8],[3,9],[3,10]],
+    },
+    {
+      name:'Early Encounter',
+      desc:'Both sides already forward — immediate contact from round 1. High intensity, less time to plan.',
+      uPos:[[6,0],[6,1],[6,5],[6,8],[6,9],[6,10],[6,12],[7,0],[7,9],[7,10],[7,12],[8,0],[8,1],[8,3],[8,5],[8,11],[8,12],[9,0],[9,2],[9,7],[9,8]],
+      cPos:[[1,0],[1,3],[1,4],[1,5],[1,8],[1,9],[1,10],[2,0],[2,1],[2,3],[2,5],[2,6],[2,7],[2,11],[3,0],[3,1],[3,2],[3,4],[3,7],[3,9],[3,10]],
+    },
+  ];
+  const s=SCENARIOS[Math.floor(Math.random()*SCENARIOS.length)];
+  s.uPos.forEach(([r,c])=>{if(!G.grid[r][c].u&&G.uPlaced<MAX_UNITS){G.grid[r][c].u='u';G.uPlaced++;}});
+  s.cPos.forEach(([r,c])=>{if(!G.grid[r][c].u&&G.cPlaced<MAX_UNITS){G.grid[r][c].u='c';G.cPlaced++;}});
+  G.phase='sc';
+  renderAll();
+  flashBar('Scenario: <b>'+s.name+'</b> — '+s.desc+'  Click ▶ Begin Battle when ready.');
+}
+function clearBoard(silent=false){
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)G.grid[r][c].u=null;
+  G.uPlaced=0;G.cPlaced=0;G.phase='su';
+  if(!silent){renderAll();flashBar('Board cleared. Union — click dashed hexes in rows 6–11 to place units.');}
+}
+function beginBattle(){
+  if(G.uPlaced<MAX_UNITS||G.cPlaced<MAX_UNITS){
+    flashBar('Need '+MAX_UNITS+' units each. Union: '+G.uPlaced+'/'+MAX_UNITS+'  Confederate: '+G.cPlaced+'/'+MAX_UNITS);
+    return;
+  }
+  G.tfDeck=shuffle([...TF_CARDS]);G.tfIdx=0;
+  showHandoff('c', ()=>startConfTurn());
+}
+
+// ─── GAME FLOW ────────────────────────────────────────────────────
+function isTutorial(){return G.round===1;}
+function startConfTurn(){
+  G.phase='tf_c';G.movPts=MAX_MOV;G.sel=null;G.reach=[];
+  if(isTutorial()){
+    showPhaseOverlay('Round 1 — Confederate Turn',
+      'Confederates: a history challenge is coming up. Answer correctly to earn a Cannonade.',
+      'Wrong answer = Union earns a Cannonade penalty against you.',
+      ()=>showInstrPopup('tf_c',()=>showTF('c')));
+  } else {
+    flashBar('Round '+G.round+' — Confederate turn. Answer the history question!');
+    showTF('c');
+  }
+}
+function startUnionTurn(){
+  G.phase='tf_u';G.movPts=MAX_MOV;G.sel=null;G.reach=[];
+  if(isTutorial()){
+    showPhaseOverlay('Round 1 — Union Turn',
+      'Union: a history challenge is coming up. Answer correctly to earn a Cannonade.',
+      'Wrong answer = Confederate earns a Cannonade penalty against you.',
+      ()=>showInstrPopup('tf_u',()=>showTF('u')));
+  } else {
+    flashBar('Round '+G.round+' — Union turn. Answer the history question!');
+    showTF('u');
+  }
+}
+
+// ─── TRUE/FALSE ───────────────────────────────────────────────────
+function showTF(side){
+  G.tfSide=side;
+  const card=G.tfDeck[G.tfIdx%G.tfDeck.length];
+  const badge=el('tfSideBadge');
+  badge.textContent=side==='c'?'Confederate ○ — Answer This Question':'Union ✕ — Answer This Question';
+  badge.className=side==='c'?'conf-badge':'union-badge';
+  el('tfQText').textContent=card.q;
+  el('tfResult').style.display='none';el('tfResult').className='';
+  el('tfContBtn').style.display='none';el('tfBtnsRow').style.display='flex';
+  el('tfOv').classList.remove('hidden');updateActionBar();
+  startTimer(PHASE_TIMES.tf,()=>{
+    // Time expired — treat as wrong answer
+    if(el('tfBtnsRow').style.display!=='none'){
+      stopTimer();el('tfBtnsRow').style.display='none';
+      const res=el('tfResult');res.style.display='block';res.className='wrong';
+      res.innerHTML='⏰ Time expired! No answer = wrong answer.<br><span style="font-weight:normal">Opponent earns the Cannonade penalty.</span>';
+      const opp=G.tfSide==='c'?'u':'c';
+      G._pendingCannon={shooter:opp,penalty:true};
+      if(G.tfSide==='c')G.recap.confQRight--;
+      else G.recap.unionQRight--;
+      el('tfContBtn').style.display='inline-block';
+    }
+  });
+}
+function answerTF(answer){
+  const card=G.tfDeck[G.tfIdx%G.tfDeck.length];
+  const ok=answer===card.a;G.tfIdx++;
+  stopTimer();el('tfBtnsRow').style.display='none';
+  const res=el('tfResult'),side=G.tfSide;
+  res.style.display='block';
+  if(ok){
+    res.className='correct';
+    res.innerHTML='✓ Correct! The answer is <b>'+(card.a?'TRUE':'FALSE')+'</b>.<br><span style="font-weight:normal">'+(side==='c'?'Confederate ○':'Union ✕')+' earns a <b>Cannonade</b>!</span>';
+    G._pendingCannon={shooter:side,penalty:false};
+    if(side==='c')G.recap.confQRight++;else G.recap.unionQRight++;
+  } else {
+    const opp=side==='c'?'u':'c';
+    res.className='wrong';
+    res.innerHTML='✗ Wrong! Correct answer was <b>'+(card.a?'TRUE':'FALSE')+'</b>.<br><span style="font-weight:normal">As a penalty, <b>'+(opp==='c'?'Confederate ○':'Union ✕')+'</b> earns a Cannonade!<br>You also lose half your movement points this turn <b>(6 pts instead of 12)</b>.</span>';
+    G._pendingCannon={shooter:opp,penalty:true};
+  }
+  el('tfContBtn').style.display='inline-block';
+}
+function closeTFOverlay(){
+  el('tfOv').classList.add('hidden');
+  const{shooter,penalty}=G._pendingCannon;
+  const turnSide=G.tfSide;
+
+  // FIX 2: Apply movement penalty NOW — wrong answer = only 6 pts this turn
+  // penalty:true means the active player (turnSide) answered wrong
+  G.movPts = penalty ? 6 : MAX_MOV;
+
+  // Check if any valid cannonade targets exist for the shooter
+  const enemy=shooter==='c'?'u':'c';
+  let has=false;
+  outer:for(let r=0;r<ROWS&&!has;r++)for(let c=0;c<COLS&&!has;c++){
+    if(G.grid[r][c].u!==enemy)continue;
+    if(hexNeighbors(r,c).some(([nr,nc])=>G.grid[nr][nc].u===shooter)){has=true;break outer;}
+  }
+
+  if(!has){
+    // FIX 1: Use a phase overlay so the message is actually readable,
+    // not instantly wiped by the next popup
+    if(penalty){
+      showPhaseOverlay(
+        '⚠ Penalty — No Targets',
+        'The opponent earned a cannonade, but no enemy units are close enough to fire on.',
+        'Movement penalty applied: only 6 movement points this turn.',
+        ()=>startMov(turnSide)
+      );
+    } else {
+      showPhaseOverlay(
+        '💥 Cannonade Earned!',
+        'Correct answer! But no enemy units are adjacent yet — nothing to fire on.',
+        'You still have full 12 movement points. Proceed to move your units.',
+        ()=>startMov(turnSide)
+      );
+    }
+    return;
+  }
+
+  // Targets exist — enter cannon mode
+  G.canMode=true;
+  const key=penalty?(shooter==='c'?'pn_c':'pn_u'):(shooter==='c'?'cn_c':'cn_u');
+  G.phase=key;
+  const enterCannon=()=>{
+    if(isTutorial()){showInstrPopup(key,()=>{renderAll();startTimer(PHASE_TIMES.cannon,()=>{if(G.canMode)skipCannon();});});}
+    else{
+      flashBar((penalty?'⚠ Penalty! ':'💥 Cannonade! ')+(shooter==='c'?'CONFEDERATE ○':'UNION ✕')+': click a red-outlined enemy hex to fire.');
+      renderAll();startTimer(PHASE_TIMES.cannon,()=>{if(G.canMode)skipCannon();});
+    }
+  };
+  // Penalty = control switches to opponent — show handoff first
+  if(penalty){
+    showHandoff(shooter, enterCannon);
+  } else {
+    enterCannon();
+  }
+}
+
+// ─── CANNONADE ────────────────────────────────────────────────────
+function isTgt(r,c){
+  let shooter,enemy;
+  if(G.phase==='cn_c'||G.phase==='pn_c'){shooter='c';enemy='u';}
+  else if(G.phase==='cn_u'||G.phase==='pn_u'){shooter='u';enemy='c';}
+  else return false;
+  if(G.grid[r][c].u!==enemy)return false;
+  return hexNeighbors(r,c).some(([nr,nc])=>G.grid[nr][nc].u===shooter);
+}
+function doCannon(r,c){
+  if(!G.canMode)return;
+  if(!isTgt(r,c)){flashBar('⚠ Invalid target — must be a red-outlined enemy hex adjacent to one of your units.');return;}
+  G.canMode=false;
+  const isPenalty=G.phase==='pn_c'||G.phase==='pn_u';
+  const turnSide=G.tfSide;
+  const shooter=(G.phase==='cn_c'||G.phase==='pn_c')?'c':'u';
+  // Pulse the firing units
+  const fkeys=[];
+  hexNeighbors(r,c).forEach(([nr,nc])=>{
+    if(G.grid[nr][nc].u===shooter){
+      el('c'+nr+'_'+nc).classList.add('attacker');fkeys.push(nr+'_'+nc);
+    }
+  });
+  setTimeout(()=>{
+    fkeys.forEach(k=>{const[nr,nc]=k.split('_').map(Number);el('c'+nr+'_'+nc).classList.remove('attacker');});
+    // Hide victim unit in SVG (don't re-render)
+    const g=el('c'+r+'_'+c);
+    const ub=g.querySelector('.hex-unit-bg'),ut=g.querySelector('.hex-unit-txt');
+    if(ub)ub.style.display='none';if(ut)ut.style.display='none';
+    showBoomAt(r,c,'cannon');
+    setTimeout(()=>{
+      G.grid[r][c].u=null;renderAll();
+      flashBar(isPenalty?'💥 Penalty cannonade! Unit at '+LTR[c]+(r+1)+' removed. Proceeding to movement…'
+                        :'💥 BOOM! Unit at '+LTR[c]+(r+1)+' destroyed! Proceeding to movement…');
+      stopTimer();
+      setTimeout(()=>{
+        if(isPenalty){showHandoff(turnSide,()=>startMov(turnSide));}
+        else{startMov(turnSide);}
+      },300);
+    },900);
+  },1550);
+}
+function skipCannon(){
+  stopTimer();G.canMode=false;renderAll();
+  const turnSide=G.tfSide;
+  const isPenalty=G.phase==='pn_c'||G.phase==='pn_u';
+  if(isPenalty){showHandoff(turnSide,()=>startMov(turnSide));}
+  else{startMov(turnSide);}
+}
+
+// ─── MOVEMENT ─────────────────────────────────────────────────────
+function startMov(side){
+  G.phase=side==='c'?'mv_c':'mv_u';G.sel=null;G.reach=[];G.moveStack=[];startTimer(60,()=>{flashBar('⏰ Time\'s up! Movement ends.');endMov();});
+  const msg=(side==='c'?'Confederate ○':'Union ✕')+': select a unit, then click a cyan hex to move. '+G.movPts+' pts left.';
+  if(isTutorial()){showInstrPopup(G.phase,()=>{flashBar(msg);renderAll();});}
+  else{flashBar(msg);renderAll();}
+}
+function bfs(sr,sc,maxPts){
+  const dist=new Map();dist.set(sr+','+sc,0);
+  const q=[{r:sr,c:sc,cost:0}];const reach=[];
+  while(q.length){
+    q.sort((a,b)=>a.cost-b.cost);
+    const{r,c,cost}=q.shift();
+    if(dist.get(r+','+c)!==cost)continue;
+    for(const[nr,nc]of hexNeighbors(r,c)){
+      const td=G.grid[nr][nc];if(td.u)continue;
+      const nc2=cost+TERRAIN[td.t].cost;
+      const nk=nr+','+nc;
+      if(nc2<=maxPts&&(!dist.has(nk)||dist.get(nk)>nc2)){
+        dist.set(nk,nc2);reach.push({r:nr,c:nc,cost:nc2});q.push({r:nr,c:nc,cost:nc2});
+      }
+    }
+  }
+  return reach;
+}
+function doMove(r,c){
+  const side=G.phase==='mv_c'?'c':'u';const d=G.grid[r][c];
+  if(!G.sel){
+    if(d.u===side){G.sel={r,c};G.reach=bfs(r,c,G.movPts);renderAll();flashBar('Unit at '+LTR[c]+(r+1)+' selected. Click a cyan hex to move. '+G.movPts+' pts left. Click same hex to deselect.');}
+    else if(d.u)flashBar('⚠ That is an enemy unit — select one of your own.');
+  } else {
+    if(G.sel.r===r&&G.sel.c===c){G.sel=null;G.reach=[];renderAll();flashBar('Unit deselected.');return;}
+    const tgt=G.reach.find(x=>x.r===r&&x.c===c);
+    if(tgt&&!d.u){
+      G.moveStack.push({fromR:G.sel.r,fromC:G.sel.c,toR:r,toC:c,cost:tgt.cost});
+      G.grid[r][c].u=side;G.grid[G.sel.r][G.sel.c].u=null;G.movPts-=tgt.cost;G.sel=null;G.reach=[];
+      flashBar('Moved to '+LTR[c]+(r+1)+' — cost '+tgt.cost+' pt'+(tgt.cost!==1?'s':'')+'. '+G.movPts+' pts remaining.');
+      if(side==='c'&&countObj()>=2){endGame('Confederate','Two Confederate units occupy different Union objective positions — Instant Confederate Victory!');return;}
+      renderAll();updateUndoBtn();
+    } else if(d.u===side){G.sel={r,c};G.reach=bfs(r,c,G.movPts);renderAll();flashBar('Switched to unit at '+LTR[c]+(r+1)+'. '+G.movPts+' pts left.');}
+    else flashBar('⚠ Cannot move there — out of range or blocked. Pick a cyan hex or click End Movement ▶.');
+  }
+}
+function undoMove(){
+  if(!G.moveStack.length)return;
+  const mv=G.moveStack.pop();
+  const side=G.phase==='mv_c'?'c':'u';
+  G.grid[mv.fromR][mv.fromC].u=side;G.grid[mv.toR][mv.toC].u=null;
+  G.movPts+=mv.cost;G.sel=null;G.reach=[];
+  flashBar('Move undone. '+G.movPts+' pts remaining.');
+  renderAll();updateUndoBtn();
+}
+function updateUndoBtn(){
+  const b=document.getElementById('undoBtn');if(b)b.disabled=G.moveStack.length===0;
+}
+function endMov(){stopTimer();G.sel=null;G.reach=[];G.moveStack=[];startBattle(G.phase==='mv_c'?'c':'u');}
+
+// ─── BATTLE ───────────────────────────────────────────────────────
+function startBattle(side){
+  G.phase=side==='c'?'bt_c':'bt_u';
+  renderAll();
+  const captures=findCaptures(side,side==='c'?'u':'c');
+  if(captures.length===0){if(checkWin())return;showTurnSummary(side,[]);return;}
+  // Pulse attacker hexes
+  const atkKeys=new Set();
+  captures.forEach(cap=>cap.attackers.forEach(a=>atkKeys.add(a.r+'_'+a.c)));
+  atkKeys.forEach(k=>{const[r,c]=k.split('_').map(Number);el('c'+r+'_'+c).classList.add('attacker');});
+  setTimeout(()=>{
+    atkKeys.forEach(k=>{const[r,c]=k.split('_').map(Number);el('c'+r+'_'+c).classList.remove('attacker');});
+    captures.forEach(({r,c})=>{
+      const g=el('c'+r+'_'+c);
+      const ub=g.querySelector('.hex-unit-bg'),ut=g.querySelector('.hex-unit-txt');
+      if(ub)ub.style.display='none';if(ut)ut.style.display='none';
+      showBoomAt(r,c,'');
+    });
+    setTimeout(()=>{
+      captures.forEach(({r,c})=>{G.grid[r][c].u=null;});
+      renderAll();
+      if(checkWin())return;
+      showTurnSummary(side,captures);
+    },1050);
+  },1550);
+}
+function findCaptures(atk,def){
+  const captures=[];
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    if(G.grid[r][c].u!==def)continue;
+    let attackers=[];let captureReason='';
+    // Condition 1: flanked on opposite hex axes
+    for(const[[r1,c1],[r2,c2]]of hexOppPairs(r,c)){
+      if(G.grid[r1][c1].u===atk&&G.grid[r2][c2].u===atk){attackers=[{r:r1,c:c1},{r:r2,c:c2}];captureReason='flanked';break;}
+    }
+    // Condition 2: 2+ adjacent attackers, at least one on hill
+    if(attackers.length===0){
+      const adj=hexNeighbors(r,c).filter(([nr,nc])=>G.grid[nr][nc].u===atk);
+      if(adj.length>=2&&adj.some(([nr,nc])=>G.grid[nr][nc].t==='H')){
+        attackers=adj.map(([nr,nc])=>({r:nr,c:nc}));captureReason='hill';
+      }
+    }
+    if(attackers.length>0)captures.push({r,c,attackers,reason:captureReason});
+  }
+  return captures;
+}
+
+// ─── TURN SUMMARY ─────────────────────────────────────────────────
+function showTurnSummary(side,captures){
+  const isConf=side==='c';
+  const uc=countUnits('u'),cc=countUnits('c'),obj=countObj();
+  const isLast=G.phase==='bt_u'&&G.round>=MAX_ROUNDS;
+  el('summaryTitle').textContent=isConf?'Confederate Turn Complete':'Union Turn Complete';
+  el('summaryRound').textContent='Round '+G.round+' of '+MAX_ROUNDS;
+  G.recap.roundsPlayed=G.round;
+  if(isConf)G.recap.confCap+=captures.length;else G.recap.unionCap+=captures.length;
+  const badge=el('summaryBadge');
+  badge.textContent=isConf?'Confederate ○':'Union ✕';
+  badge.className='instr-badge '+(isConf?'conf-b':'union-b');
+  const rows=[];
+  if(captures.length>0){
+    captures.forEach(cap=>{
+      const pos=LTR[cap.c]+(cap.r+1);
+      const why=cap.reason==='hill'?'surrounded on a hill':'flanked from opposite sides';
+      rows.push({cls:'good',icon:'💥',text:'Unit at <b>'+pos+'</b> captured — <i>'+why+'</i>'});
+    });
+  } else rows.push({cls:'neutral',icon:'🛡',text:'No units were captured this turn.'});
+  rows.push({cls:'neutral',icon:'🪖',text:'<span class="uc-t">Union ✕</span> remaining: <b>'+uc+'</b> &nbsp;·&nbsp; <span class="cc-t">Confederate ○</span> remaining: <b>'+cc+'</b>'});
+  if(obj===0)rows.push({cls:'neutral',icon:'★',text:'No Confederate objectives held.'});
+  else if(obj>=2)rows.push({cls:'danger',icon:'★',text:'Confederate holds <b>'+obj+'/3</b> objectives — <b>danger!</b>'});
+  else rows.push({cls:'warn',icon:'★',text:'Confederate holds <b>'+obj+'/3</b> objectives.'});
+  if(isLast)rows.push({cls:'neutral',icon:'⚔',text:'<b>That was the final round!</b>'});
+  else if(G.phase==='bt_c')rows.push({cls:'neutral',icon:'▶',text:'<b>Union ✕</b> takes their turn next.'});
+  else rows.push({cls:'neutral',icon:'▶',text:'Round <b>'+(G.round+1)+'</b> begins — Confederate ○ goes first.'});
+  el('summaryBody').innerHTML=rows.map(r=>'<div class="sum-row '+r.cls+'"><span class="sum-icon">'+r.icon+'</span><span>'+r.text+'</span></div>').join('');
+  const btn=el('summaryBtn');
+  if(isLast)btn.textContent='⚔ See Final Result';
+  else if(G.phase==='bt_c')btn.textContent='▶ Union — Begin Your Turn';
+  else btn.textContent='▶ Start Round '+(G.round+1);
+  el('summaryOv').classList.remove('hidden');
+  startTimer(PHASE_TIMES.summary,()=>{if(!el('summaryOv').classList.contains('hidden'))endBattle();});
+}
+function endBattle(){
+  stopTimer();el('summaryOv').classList.add('hidden');
+  if(G.phase==='bt_c'){if(checkWin())return;showHandoff('u',()=>startUnionTurn());}
+  else{
+    if(G.round>=MAX_ROUNDS){endGame('Union','The Union defended Cemetery Ridge for all '+MAX_ROUNDS+' rounds — Union Victory!');return;}
+    G.round++;showHandoff('c',()=>startConfTurn());
+  }
+}
+
+// ─── WIN / END GAME ───────────────────────────────────────────────
+function checkWin(){
+  if(countUnits('u')===0){endGame('Confederate','All Union forces eliminated — Confederate Victory!');return true;}
+  if(countUnits('c')===0){endGame('Union','All Confederate forces eliminated — Union Victory!');return true;}
+  if(countObj()>=3){endGame('Confederate','Confederate forces captured 3 Union objectives — Confederate Victory!');return true;}
+  return false;
+}
+function endGame(winner,msg){
+  stopTimer();G.phase='ov';
+  el('goTitle').textContent=winner==='Confederate'?'⬛ Confederate Victory!':'🔵 Union Victory!';
+  el('goMsg').textContent=msg;
+  const r=G.recap;
+  el('recapBody').innerHTML=
+    '<div class="sum-row neutral"><span class="sum-icon">⚔</span><span>Rounds played: <b>'+r.roundsPlayed+' / '+MAX_ROUNDS+'</b></span></div>'+
+    '<div class="sum-row good"><span class="sum-icon">🔵</span><span>Union captured <b>'+r.unionCap+'</b> Confederate units</span></div>'+
+    '<div class="sum-row danger"><span class="sum-icon">⬛</span><span>Confederate captured <b>'+r.confCap+'</b> Union units</span></div>'+
+    '<div class="sum-row neutral"><span class="sum-icon">🎴</span><span>Questions correct — Confederate: <b>'+r.confQRight+'</b> · Union: <b>'+r.unionQRight+'</b></span></div>';
+  el('goOv').classList.remove('hidden');updateHeader();
+}
+
+// ─── OVERLAYS ─────────────────────────────────────────────────────
+function showHandoff(side, cb) {
+  const isConf = side === 'c';
+  const el_ho = el('handoffOv');
+  const el_side = el('handoffSide');
+  const el_name = el('handoffName');
+  const el_btn  = el('handoffBtn');
+  el_ho.className = 'ov handoff-ov ' + (isConf ? 'handoff-conf' : 'handoff-union');
+  el_side.textContent = isConf ? '⬛ Confederate Player' : '🔵 Union Player';
+  el_name.textContent = isConf ? 'Confederate — Your Turn' : 'Union — Your Turn';
+  el_btn.textContent  = isConf ? '⬛ Confederate — Ready!' : '🔵 Union — Ready!';
+  el_btn.className    = isConf ? 'handoff-btn handoff-btn-conf' : 'handoff-btn handoff-btn-union';
+  el_btn.onclick      = () => { el_ho.classList.add('hidden'); if(cb) cb(); };
+  el_ho.classList.remove('hidden');
+}
+
+function showPhaseOverlay(title,msg,sub,cb){
+  el('poTitle').textContent=title;el('poMsg').textContent=msg;el('poSub').textContent=sub||'';
+  G._phOvCb=cb||null;el('phOv').classList.remove('hidden');
+}
+function closePhaseOverlay(){
+  el('phOv').classList.add('hidden');
+  if(G._phOvCb){const cb=G._phOvCb;G._phOvCb=null;cb();}
+}
+
+// ─── FULLSCREEN ───────────────────────────────────────────────────
+function toggleFS(){
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen();el('fsBtn').textContent='✕ Exit Fullscreen';}
+  else{document.exitFullscreen();el('fsBtn').textContent='⛶ Fullscreen';}
+}
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement)el('fsBtn').textContent='⛶ Fullscreen';
+  setTimeout(()=>{resize();renderAll();},120);
+});
+window.addEventListener('resize',()=>{resize();renderAll();});
+
+// ─── UTILITIES ────────────────────────────────────────────────────
+function el(id){return document.getElementById(id);}
+function countUnits(side){let n=0;for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(G.grid[r][c].u===side)n++;return n;}
+function countObj(){return OBJECTIVES.filter(([r,c])=>G.grid[r][c].u==='c').length;}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function flashBar(html){el('phLbl').innerHTML=html;}
+
+// ─── TIMER ────────────────────────────────────────────────────────
+function toggleTimer(){
+  G.timerOn=!G.timerOn;
+  const btn=el('timerToggle');
+  if(btn){btn.textContent=G.timerOn?'⏱ Timer: ON':'⏱ Timer: OFF';
+    btn.style.background=G.timerOn?'rgba(160,30,30,.7)':'rgba(255,255,255,.15)';}
+  if(!G.timerOn)stopTimer();
+}
+function startTimer(secs,onExpire){
+  if(!G.timerOn||isTutorial())return;
+  stopTimer();
+  G.timerSec=secs||60;G._timerMax=G.timerSec;G._timerExpire=onExpire||null;
+  updateTimerDisplay();
+  const tf=el('timerFloat');if(tf){tf.style.display='flex';tf.style.flexDirection='column';}
+  G._timerInterval=setInterval(()=>{
+    G.timerSec--;updateTimerDisplay();
+    if(G.timerSec<=0){
+      stopTimer();
+      if(G._timerExpire){const cb=G._timerExpire;G._timerExpire=null;cb();}
+    }
+  },1000);
+}
+function stopTimer(){
+  if(G._timerInterval){clearInterval(G._timerInterval);G._timerInterval=null;}
+  const tf=el('timerFloat');if(tf)tf.style.display='none';
+}
+function updateTimerDisplay(){
+  const d=el('timerDisplay');if(!d)return;
+  const max=G._timerMax||60;
+  const pct=(G.timerSec/max)*100;
+  d.textContent=G.timerSec;
+  const colour=G.timerSec<=10?'#ff3030':G.timerSec<=20?'#ffaa00':'#7aff7a';
+  d.style.color=colour;
+  const fill=el('timerFill');
+  if(fill){fill.style.width=pct+'%';fill.style.background=colour;}
+  const inner=el('timerInner');
+  if(inner){inner.style.borderColor=G.timerSec<=10?'#ff3030':G.timerSec<=20?'#ffaa00':'rgba(255,255,255,.3)';}
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────
+window.onload=()=>{
+  initGrid();buildDOM();
+  // Reflect default timer-on state in the button
+  const btn=el('timerToggle');
+  if(btn){btn.style.background='rgba(160,30,30,.7)';}
+};
+
+</script>
+</body>
+</html>
